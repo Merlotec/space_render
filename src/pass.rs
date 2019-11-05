@@ -246,17 +246,17 @@ fn build_custom_pipeline<B: Backend>(
 
 /// A [RenderPlugin] for our custom plugin
 #[derive(Debug)]
-pub struct SkyRender {
+pub struct CosmosRender {
     sky: Option<Cosmos>,
 }
 
-impl SkyRender {
+impl CosmosRender {
     pub fn new(sky: Option<Cosmos>) -> Self {
         Self { sky }
     }
 }
 
-impl<B: Backend> RenderPlugin<B> for SkyRender {
+impl<B: Backend> RenderPlugin<B> for CosmosRender {
     fn on_build<'a, 'b>(
         &mut self,
         world: &mut World,

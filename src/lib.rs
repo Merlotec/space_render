@@ -1,7 +1,7 @@
 pub mod pass;
 pub mod util;
 
-pub use pass::SkyRender;
+pub use pass::CosmosRender;
 
 use amethyst::{
     core::math::Vector2,
