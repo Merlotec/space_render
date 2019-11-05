@@ -83,7 +83,7 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawSkyDesc {
         self,
         _ctx: &GraphContext<B>,
         factory: &mut Factory<B>,
-        _queue: QueueId,
+        queue: QueueId,
         _world: &World,
         framebuffer_width: u32,
         framebuffer_height: u32,
@@ -93,7 +93,7 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawSkyDesc {
     ) -> Result<Box<dyn RenderGroup<B, World>>, failure::Error> {
         let env = FlatEnvironmentSub::new(factory)?;
         let star_buffer = DynamicShaderBuffer::new(factory, pso::ShaderStageFlags::VERTEX)?;
-        let vertex = StaticVertexBuffer::allocate(factory, &STATIC_VERTEX_DATA, Some(&STATIC_INSTANCE_DATA))?;
+        let vertex = StaticVertexBuffer::allocate(factory, queue, &STATIC_VERTEX_DATA, Some(&STATIC_INSTANCE_DATA))?;
 
         let (pipeline, pipeline_layout) = build_custom_pipeline(
             factory,
