@@ -3,8 +3,8 @@
 
 const vec2 CENTER = vec2(0.5, 0.5);
 
-const float GLOW_START_DIST = 0.35;
-const float GLOW_FACTOR = 0.5;
+const float GLOW_START_DIST = 0.2;
+const float GLOW_DENOMINATOR = 0.8;
 
 /// This should be a contant square.
 layout(location = 0) in vec2 tex_coords;
@@ -16,7 +16,7 @@ void main() {
     float dist = distance(tex_coords, CENTER);
     float alpha = 1.0;
     if (dist > GLOW_START_DIST) {
-        alpha = (((CENTER.x - GLOW_START_DIST) - dist) / GLOW_START_DIST) * GLOW_FACTOR;
+        alpha = ((CENTER.x - dist) / GLOW_DENOMINATOR);
     }
     target = vec4(color, alpha);
 }
