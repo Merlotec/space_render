@@ -1,6 +1,6 @@
 [package]
 name = "cosmos-render"
-version = "0.1.1"
+version = "0.1.2"
 description="A compact render plugin to the Amethyst game engine which renders the 'cosmos' (so basically lots of tiny stars) in real time."
 repository="https://github.com/Merlotec/comsmos-render.git"
 authors = ["Brodie Knight <ncbmknight@gmail.com>"]

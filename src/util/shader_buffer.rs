@@ -55,6 +55,14 @@ impl<B: Backend, T> DynamicShaderBuffer<B, T> {
         self.layout.raw()
     }
 
+    pub fn invalidate(&mut self) {
+        self.per_image.clear();
+    }
+
+    pub fn contains_image_at(&self, index: usize) -> bool {
+        self.per_image.len() > index
+    }
+
     pub fn write(&mut self, factory: &Factory<B>, index: usize, data: &[T]) -> bool {
         let mut changed = false;
         let this_image = {

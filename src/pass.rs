@@ -69,16 +69,16 @@ lazy_static::lazy_static! {
 
 /// Draw triangles.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct DrawSkyDesc;
+pub struct DrawCosmosDesc;
 
-impl DrawSkyDesc {
-    /// Create instance of `DrawSkyDesc` render group
+impl DrawCosmosDesc {
+    /// Create instance of `DrawCosmosDesc` render group
     pub fn new() -> Self {
         Default::default()
     }
 }
 
-impl<B: Backend> RenderGroupDesc<B, World> for DrawSkyDesc {
+impl<B: Backend> RenderGroupDesc<B, World> for DrawCosmosDesc {
     fn build(
         self,
         _ctx: &GraphContext<B>,
@@ -144,12 +144,17 @@ impl<B: Backend> RenderGroup<B, World> for DrawSky<B> {
                     star_vec.push(StarData::from(*star));
                 }
                 self.star_list = star_vec;
+                self.star_buffer.invalidate();
             }
             sky.changed = false;
             self.env.process(factory, index, world);
-            let changed = self.star_buffer.write_formatted(factory, index, self.star_list.as_slice());
-            if changed {
-                PrepareResult::DrawRecord
+            if !self.star_buffer.contains_image_at(index) {
+                let changed = self.star_buffer.write_formatted(factory, index, self.star_list.as_slice());
+                if changed {
+                    PrepareResult::DrawRecord
+                } else {
+                    PrepareResult::DrawReuse
+                }
             } else {
                 PrepareResult::DrawReuse
             }
@@ -278,7 +283,7 @@ impl<B: Backend> RenderPlugin<B> for CosmosRender {
     ) -> Result<(), Error> {
         plan.extend_target(Target::Main, |ctx| {
             // Add our Description
-            ctx.add(RenderOrder::AfterOpaque, DrawSkyDesc::new().builder())?;
+            ctx.add(RenderOrder::AfterOpaque, DrawCosmosDesc::new().builder())?;
             Ok(())
         });
         Ok(())
