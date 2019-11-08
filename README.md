@@ -2,8 +2,7 @@
 A compact render plugin to the Amethyst game engine which renders the 'cosmos' (so basically lots of tiny stars) in real time.
 
 # How to use
-Add the `CosmosRender` plugin to your Amethyst render bundle.
-
+Add the `CosmosRender` plugin to your Amethyst render bundle as shown:
 ```rust
 
 let display_config_path = app_root.join("config\\display.ron");
@@ -21,3 +20,4 @@ let game_data = GameDataBuilder::default()
             // We need to include the `CosmosRender` plugin in our rendering bundle.
             .with_plugin(CosmosRender::new(Some(Cosmos::default())))
     )?;
+```
