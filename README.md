@@ -4,6 +4,7 @@ A compact render plugin to the Amethyst game engine which renders the 'cosmos' (
 # How to use
 Add the `CosmosRender` plugin to your Amethyst render bundle as shown:
 ```rust
+use cosmos_render::{Cosmos, CosmosRender};
 
 let display_config_path = app_root.join("config\\display.ron");
 
