@@ -27,6 +27,7 @@ use glsl_layout::AsStd140;
 pub struct PerImageDynamicShaderBuffer<B: Backend, T> {
     buffer: Escape<Buffer<B>>,
     set: Escape<DescriptorSet<B>>,
+    count: usize,
     marker: PhantomData<T>,
 }
 
@@ -51,6 +52,7 @@ impl<B: Backend, T> DynamicShaderBuffer<B, T> {
     }
 
     /// Returns the `DescriptSetLayout` for this set.
+    #[inline]
     pub fn raw_layout(&self) -> &B::DescriptorSetLayout {
         self.layout.raw()
     }
@@ -59,8 +61,18 @@ impl<B: Backend, T> DynamicShaderBuffer<B, T> {
         self.per_image.clear();
     }
 
+    #[inline]
     pub fn contains_image_at(&self, index: usize) -> bool {
         self.per_image.len() > index
+    }
+
+    #[inline]
+    pub fn buffer_len(&self, index: usize) -> usize {
+        if let Some(this_image) = self.per_image.get(index) {
+            this_image.count
+        } else {
+            0
+        }
     }
 
     pub fn write(&mut self, factory: &Factory<B>, index: usize, data: &[T]) -> bool {
@@ -68,21 +80,23 @@ impl<B: Backend, T> DynamicShaderBuffer<B, T> {
         let this_image = {
             while self.per_image.len() <= index {
                 self.per_image
-                    .push(PerImageDynamicShaderBuffer::new(factory, &self.layout, data.len()));
+                    .push(PerImageDynamicShaderBuffer::new(factory, &self.layout, mem::size_of::<T>() * data.len(), data.len()));
                 changed = true;
             }
             &mut self.per_image[index]
         };
 
-        let mut mapped = this_image.map(factory);
-        let mut writer = unsafe {
-            mapped
-                .write::<u8>(factory.device(), 0..(std::mem::size_of::<T>() * data.len()) as u64)
-                .unwrap()
-        };
-        let slice = unsafe { writer.slice() };
-
-        slice.copy_from_slice(util::slice_as_bytes(data));
+        {
+            let mut mapped = this_image.map(factory);
+            let mut writer = unsafe {
+                mapped
+                    .write::<u8>(factory.device(), 0..(std::mem::size_of::<T>() * data.len()) as u64)
+                    .unwrap()
+            };
+            let slice = unsafe { writer.slice() };
+            
+            slice.copy_from_slice(util::slice_as_bytes(data));
+        }
         changed
     }
 
@@ -96,6 +110,20 @@ impl<B: Backend, T> DynamicShaderBuffer<B, T> {
         encoder: &mut RenderPassEncoder<'_, B>,
     ) {
         self.per_image[index].bind(pipeline_layout, binding_id, encoder);
+    }
+
+    pub fn read(&mut self, factory: &Factory<B>, index: usize) -> Option<Vec<T>> where T: std::marker::Copy {
+        if let Some(this_image) = self.per_image.get_mut(index) {
+            let count = this_image.count;
+            let mut mapped: MappedRange<B> = this_image.map(factory);
+            let bytes = unsafe {
+                mapped.read::<T>(factory, 0..(count * mem::size_of::<T>()) as u64)
+            }.ok()?;
+            let vec: Vec<T> = bytes.to_vec();
+            Some(vec)
+        } else {
+            None
+        }
     }
 }
 
@@ -111,28 +139,29 @@ impl<B: Backend, T: AsStd140> DynamicShaderBuffer<B, T>
         let mut changed = false;
         let this_image = {
             while self.per_image.len() <= index {
-                self.per_image
-                    .push(PerImageDynamicShaderBuffer::new(factory, &self.layout, mem::size_of::<T::Std140>() * formatted.len()));
+                self.per_image.push(PerImageDynamicShaderBuffer::new(factory, &self.layout, mem::size_of::<T::Std140>() * formatted.len(), formatted.len()));
                 changed = true;
             }
             &mut self.per_image[index]
         };
-
-        let mut mapped = this_image.map(factory);
-        let mut writer = unsafe {
-            mapped
-                .write::<u8>(factory.device(), 0..(mem::size_of::<T::Std140>() * formatted.len()) as u64)
-                .unwrap()
-        };
-        let slice = unsafe { writer.slice() };
-
-        slice.copy_from_slice(util::slice_as_bytes(formatted.as_slice()));
+        {
+            let mut mapped = this_image.map(factory);
+            let mut writer = unsafe {
+                mapped
+                    .write::<u8>(factory.device(), 0..(mem::size_of::<T::Std140>() * formatted.len()) as u64)
+                    .unwrap()
+            };
+            let slice = unsafe { writer.slice() };
+        
+            slice.copy_from_slice(util::slice_as_bytes(formatted.as_slice()));
+        }
+        this_image.count = formatted.len();
         changed
     }
 }
 
 impl<B: Backend, T> PerImageDynamicShaderBuffer<B, T> {
-    fn new(factory: &Factory<B>, layout: &Handle<DescriptorSetLayout<B>>, size: usize) -> Self {
+    fn new(factory: &Factory<B>, layout: &Handle<DescriptorSetLayout<B>>, size: usize, count: usize) -> Self {
         let buffer = factory
             .create_buffer(
                 BufferInfo {
@@ -152,6 +181,7 @@ impl<B: Backend, T> PerImageDynamicShaderBuffer<B, T> {
         Self {
             buffer,
             set,
+            count,
             marker: PhantomData,
         }
     }

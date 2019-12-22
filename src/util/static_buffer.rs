@@ -28,9 +28,7 @@ use amethyst::renderer::{
 pub struct StaticVertexBuffer<B: Backend, T> {
     vertex_buffer: Escape<Buffer<B>>,
     vertex_count: usize,
-
     index_buffer: Option<(Escape<Buffer<B>>, usize)>,
-
     phantom: PhantomData<T>,
 }
 

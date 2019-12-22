@@ -26,7 +26,7 @@ use amethyst::{
 use glsl_layout::*;
 
 use super::*;
-use super::util::*;
+use crate::util::*;
 
 pub const STAR_DEPTH: f32 = -1000.0;
 
@@ -55,13 +55,13 @@ lazy_static::lazy_static! {
     // These uses the precompiled shaders.
     // These can be obtained using glslc.exe in the vulkan sdk.
     static ref VERTEX: SpirvShader = SpirvShader::new(
-        include_bytes!("../shaders/spirv/star_point.vert.spv").to_vec(),
+        include_bytes!("../../shaders/spirv/star_point.vert.spv").to_vec(),
         ShaderStageFlags::VERTEX,
         "main",
     );
 
     static ref FRAGMENT: SpirvShader = SpirvShader::new(
-        include_bytes!("../shaders/spirv/star_point.frag.spv").to_vec(),
+        include_bytes!("../../shaders/spirv/star_point.frag.spv").to_vec(),
         ShaderStageFlags::FRAGMENT,
         "main",
     );
@@ -104,7 +104,7 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCosmosDesc {
             None,
         )?;
 
-        Ok(Box::new(DrawSky::<B> {
+        Ok(Box::new(DrawCosmos::<B> {
             pipeline,
             pipeline_layout,
             env,
@@ -117,16 +117,16 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCosmosDesc {
 
 /// Draws triangles to the screen.
 #[derive(Debug)]
-pub struct DrawSky<B: Backend> {
+pub struct DrawCosmos<B: Backend> {
     pipeline: B::GraphicsPipeline,
     pipeline_layout: B::PipelineLayout,
     env: FlatEnvironmentSub<B>,
     vertex: StaticVertexBuffer<B, PosTex>,
-    star_list: Vec<StarData>,
-    star_buffer: DynamicShaderBuffer<B, StarData>,
+    star_list: Vec<StarPointData>,
+    star_buffer: DynamicShaderBuffer<B, StarPointData>,
 }
 
-impl<B: Backend> RenderGroup<B, World> for DrawSky<B> {
+impl<B: Backend> RenderGroup<B, World> for DrawCosmos<B> {
     fn prepare(
         &mut self,
         factory: &Factory<B>,
@@ -141,7 +141,7 @@ impl<B: Backend> RenderGroup<B, World> for DrawSky<B> {
                 let stars: &[StarPoint] = sky.stars();
                 let mut star_vec = Vec::with_capacity(stars.len());
                 for star in stars {
-                    star_vec.push(StarData::from(*star));
+                    star_vec.push(StarPointData::from(*star));
                 }
                 self.star_list = star_vec;
                 self.star_buffer.invalidate();
@@ -252,12 +252,12 @@ fn build_custom_pipeline<B: Backend>(
 /// A [RenderPlugin] for our custom plugin
 #[derive(Debug)]
 pub struct CosmosRender {
-    sky: Option<Cosmos>,
+    cosmos: Option<Cosmos>,
 }
 
 impl CosmosRender {
-    pub fn new(sky: Option<Cosmos>) -> Self {
-        Self { sky }
+    pub fn new(cosmos: Option<Cosmos>) -> Self {
+        Self { cosmos }
     }
 }
 
@@ -269,8 +269,8 @@ impl<B: Backend> RenderPlugin<B> for CosmosRender {
     ) -> Result<(), Error> {
         // Add the required components to the world ECS
         // We need to move the object out of the option to obtain it validly.
-        if let Some(sky) = self.sky.take() {
-            world.insert(sky);
+        if let Some(cosmos) = self.cosmos.take() {
+            world.insert(cosmos);
         }
         Ok(())
     }
@@ -283,7 +283,7 @@ impl<B: Backend> RenderPlugin<B> for CosmosRender {
     ) -> Result<(), Error> {
         plan.extend_target(Target::Main, |ctx| {
             // Add our Description
-            ctx.add(RenderOrder::AfterOpaque, DrawCosmosDesc::new().builder())?;
+            ctx.add(RenderOrder::Opaque, DrawCosmosDesc::new().builder())?;
             Ok(())
         });
         Ok(())
@@ -292,13 +292,13 @@ impl<B: Backend> RenderPlugin<B> for CosmosRender {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd, AsStd140)]
 #[repr(C, align(4))]
-pub struct StarData {
+pub struct StarPointData {
     pub spherical_coords: vec2,
     pub color: vec3,
     pub scale: float,
 }
 
-impl From<StarPoint> for StarData {
+impl From<StarPoint> for StarPointData {
     fn from(point: StarPoint) -> Self {
         Self {
             spherical_coords: Into::<[f32; 2]>::into(point.spherical_coords).into(),

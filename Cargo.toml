@@ -1,6 +1,6 @@
 [package]
-name = "cosmos-render"
-version = "0.1.2"
+name = "space-render"
+version = "0.1.0"
 description="A compact render plugin to the Amethyst game engine which renders the 'cosmos' (so basically lots of tiny stars) in real time."
 repository="https://github.com/Merlotec/comsmos-render.git"
 authors = ["Brodie Knight <ncbmknight@gmail.com>"]
@@ -17,7 +17,6 @@ glsl-to-spirv = "0.1.7"
 vulkan = ["amethyst/vulkan"]
 metal = ["amethyst/metal"]
 empty = ["amethyst/empty"]
-default=["amethyst/vulkan"]
 
 [dependencies]
 amethyst="0.13.2"
@@ -25,3 +24,5 @@ rand = "0.7.2"
 lazy_static = "1.4.0"
 failure = "0.1.6"
 glsl-layout = "0.3.2"
+serde = "1.0.102"
+image = "0.22.3"
