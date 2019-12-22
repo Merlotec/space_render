@@ -1,6 +1,6 @@
 # space_render
 A compact render plugin to the Amethyst game engine which renders different space elements.
-It currently supports planet rendering (well, the atmosphere), star/sun rendering and background star rendering (lots of tiny stars).
+It currently supports planet rendering (well, the atmosphere), star/sun rendering and background cosmos rendering (lots of tiny stars).
 
 
 # How to use
