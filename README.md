@@ -1,10 +1,12 @@
-# cosmos_render
-A compact render plugin to the Amethyst game engine which renders the 'cosmos' (so basically lots of tiny stars) in real time.
+# space_render
+A compact render plugin to the Amethyst game engine which renders different space elements.
+It currently supports planet rendering (well, the atmosphere), star/sun rendering and background star rendering (lots of tiny stars).
+
 
 # How to use
 Add the `CosmosRender` plugin to your Amethyst render bundle as shown:
 ```rust
-use cosmos_render::{Cosmos, CosmosRender};
+use space_render::cosmos::{Cosmos, CosmosRender};
 
 let display_config_path = app_root.join("config\\display.ron");
 
