@@ -24,7 +24,7 @@ let game_data = GameDataBuilder::default()
             // The following are necessary for 3D pbr rendering:
             //.with_plugin(RenderToWindow::from_config_path(display_config_path).with_clear([0.0, 0.0, 0.0, 0.0]))
             //.with_plugin(RenderPbr3D::default().with_skinning())
-            // We need to include the `CosmosRender` plugin in our rendering bundle.
+            // We need to include the `CosmosRender` plugin in our rendering bundle in order to render the background stars.
             .with_plugin(CosmosRender::new(Some(Cosmos::default()))),
             // This is the atmosphere renderer.
             .with_plugin(PlanetRender::new()),
