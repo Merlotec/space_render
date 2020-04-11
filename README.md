@@ -26,7 +26,11 @@ let game_data = GameDataBuilder::default()
             //.with_plugin(RenderPbr3D::default().with_skinning())
             // We need to include the `CosmosRender` plugin in our rendering bundle.
             .with_plugin(CosmosRender::new(Some(Cosmos::default()))),
+            // This is the atmosphere renderer.
             .with_plugin(PlanetRender::new()),
+            // This renders the 'sun' (basicall just a billboard).
+            // It does the job far away but it doesn't really work if you get up close.
+            // May fix if needed in the future.
             .with_plugin(StarRender::new()),
     )?;
 ```
