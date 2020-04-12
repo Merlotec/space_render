@@ -1,4 +1,4 @@
-[s1]: https://img.shields.io/crates/v/space-render.svg
+[s1]: https://img.shields.io/crates/v/space_render.svg
 
 # space_render
 A compact render plugin to the Amethyst game engine which renders different space elements.
