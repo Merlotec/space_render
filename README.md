@@ -11,9 +11,10 @@ Add `space-render={version="0.1.1", features=["vulkan"]}` to your `cargo.toml` u
 Then add the required plugins to your Amethyst render bundle as shown:
 ```rust
 use space_render::{
-    cosmos::{Cosmos, CosmosRender},
-    planet::PlanetRender,
-    star::StarRender,
+    CosmosRender,
+    cosmos::Cosmos,
+    AtmosphereRender,
+    StarRender,
 };
 
 let display_config_path = app_root.join("config\\display.ron");
@@ -31,7 +32,7 @@ let game_data = GameDataBuilder::default()
             // We need to include the `CosmosRender` plugin in our rendering bundle in order to render the background stars.
             .with_plugin(CosmosRender::new(Some(Cosmos::default()))),
             // This is the atmosphere renderer.
-            .with_plugin(PlanetRender::new()),
+            .with_plugin(AtmosphereRender::new()),
             // This renders the 'sun' (basicall just a billboard).
             // It does the job far away but it doesn't really work if you get up close.
             // May fix if needed in the future.
