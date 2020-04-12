@@ -35,6 +35,6 @@ let game_data = GameDataBuilder::default()
             // This renders the 'sun' (basicall just a billboard).
             // It does the job far away but it doesn't really work if you get up close.
             // May fix if needed in the future.
-            .with_plugin(StarRender::new()),
+            .with_plugin(StarRender::new("asset/path/to/star/image.png")),
     )?;
 ```
