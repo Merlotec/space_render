@@ -6,7 +6,9 @@ It currently supports planet rendering (well, the atmosphere), star/sun renderin
 
 
 # How to use
-Add the required plugins to your Amethyst render bundle as shown:
+Add `space-render={version="0.1.1", features=["vulkan"]}` to your `cargo.toml` under `[dependencies]`. If you're using a different backend, specify this in the the features.
+
+Then add the required plugins to your Amethyst render bundle as shown:
 ```rust
 use space_render::{
     cosmos::{Cosmos, CosmosRender},
