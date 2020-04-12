@@ -1,3 +1,5 @@
+[s1]: https://img.shields.io/crates/v/space-render.svg
+
 # space_render
 A compact render plugin to the Amethyst game engine which renders different space elements.
 It currently supports planet rendering (well, the atmosphere), star/sun rendering and background cosmos rendering (lots of tiny stars).
