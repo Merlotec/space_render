@@ -1,43 +1,44 @@
 use std::ops::Range;
 
 use amethyst::{
-    core::ecs::{
-        DispatcherBuilder, World, ReadStorage, Entity,
+    assets::{
+        Loader,
+        AssetStorage,
     },
-    core::math::{Matrix4, Vector3, Vector4},
+    core::ecs::{
+        DispatcherBuilder, World,
+    },
     error::Error,
     renderer::{
-        camera::Camera,
         bundle::{RenderOrder, RenderPlan, RenderPlugin, Target},
         pipeline::{PipelineDescBuilder, PipelinesBuilder},
         rendy::{
             command::{QueueId, RenderPassEncoder},
-            factory::{Factory, ImageState},
+            factory::Factory,
             graph::{
                 GraphContext,
                 NodeBuffer, NodeImage, render::{PrepareResult, RenderGroup, RenderGroupDesc},
             },
-            hal::{self, device::Device,  pso, pso::ShaderStageFlags, query},
+            hal::{self, device::Device,  pso, pso::ShaderStageFlags},
             mesh::{AsVertex, Position, TexCoord, PosTex},
             shader::{Shader, SpirvShader},
-            texture::{Texture, TextureBuilder, pixel::Rgba8Srgb},
         },
-        submodules::{FlatEnvironmentSub, gather::CameraGatherer},
+        submodules::{
+            FlatEnvironmentSub,
+            TextureSub,
+        },
+        Texture,
         types::Backend, util,
     },
 };
 
-use std::io::Cursor;
 use super::*;
 use crate::{
-    planet::{
-        sub::*,
-        PlanetList,
-        PlanetData,
-    },
     star::sub::*,
-    util::*,
 };
+
+use crate::renderutils::*;
+
 use amethyst::prelude::WorldExt;
 
 const STATIC_DEPTH: f32 = 0.0;
@@ -54,22 +55,19 @@ const STATIC_INSTANCE_DATA: [u32; 6] = [0, 1, 2, 0, 3, 2];
 
 
 lazy_static::lazy_static! {
-    // These uses the precompiled shaders.
-    // These can be obtained using glslc.exe in the vulkan sdk.
-    static ref VERTEX: SpirvShader = SpirvShader::new(
-        include_bytes!("../../shaders/spirv/star.vert.spv").to_vec(),
+    static ref VERTEX: SpirvShader = SpirvShader::from_bytes(
+        include_bytes!("../../shaders/spirv/star.vert.spv"),
         ShaderStageFlags::VERTEX,
         "main",
-    );
+    ).unwrap();
 
-    static ref FRAGMENT: SpirvShader = SpirvShader::new(
-        include_bytes!("../../shaders/spirv/star.frag.spv").to_vec(),
+    static ref FRAGMENT: SpirvShader = SpirvShader::from_bytes(
+        include_bytes!("../../shaders/spirv/star.frag.spv"),
         ShaderStageFlags::FRAGMENT,
         "main",
-    );
+    ).unwrap();
 }
 
-/// Draw triangles.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DrawStarDesc;
 
@@ -83,7 +81,7 @@ impl DrawStarDesc {
 impl<B: Backend> RenderGroupDesc<B, World> for DrawStarDesc {
     fn build(
         self,
-        ctx: &GraphContext<B>,
+        _ctx: &GraphContext<B>,
         factory: &mut Factory<B>,
         queue: QueueId,
         _world: &World,
@@ -98,7 +96,7 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawStarDesc {
             factory,
             hal::pso::ShaderStageFlags::VERTEX | hal::pso::ShaderStageFlags::FRAGMENT
         )?;
-        let tex = load_glow_texture(factory, queue, ctx.frames_in_flight as usize, hal::pso::ShaderStageFlags::FRAGMENT)?;
+        let tex = TextureSub::new(factory)?;
         
         // Load billboard mesh.
         let vertex = StaticVertexBuffer::allocate(factory, queue, &STATIC_VERTEX_DATA, Some(&STATIC_INSTANCE_DATA))?;
@@ -128,7 +126,7 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawStarDesc {
     }
 }
 
-/// Draws triangles to the screen.
+
 #[derive(Debug)]
 pub struct DrawStar<B: Backend> {
     pipeline: B::GraphicsPipeline,
@@ -136,7 +134,7 @@ pub struct DrawStar<B: Backend> {
     env: FlatEnvironmentSub<B>,
     vertex: StaticVertexBuffer<B, PosTex>,
     stars: StarSub<B>,
-    tex: TextureSet<B>,
+    tex: TextureSub<B>,
     // query_pool: B::QueryPool,
 }
 
@@ -153,20 +151,14 @@ impl<B: Backend> RenderGroup<B, World> for DrawStar<B> {
         self.env.process(factory, index, world);
         self.stars.process(factory, index, world);
 
-        // let mut query_data = Vec::with_capacity(4);
-        // factory.device().get_query_pool_results(
-        //     &self,
-        //     pool: &self.query_pool,
-        //     queries: ..,
-        //     data: &mut query_data,
-        //     stride: 4,
-        //     flags: query::ResultFlags::none(),
-        // );
-
-        // let count: u32 = unsafe {
-        //     *(query_data.as_ptr() as *const u32)
-        // };
-        
+        // Load any unloaded textures.
+        // TODO: make more efficient!
+        if let Some(mut star_texture) = world.try_fetch_mut::<StarTexture>() {
+            if let Some((texture, _)) = self.tex.insert(factory, world, &star_texture.texture, hal::image::Layout::ShaderReadOnlyOptimal) {
+                star_texture.tex_id = Some(texture);
+            }
+        }
+        self.tex.maintain(factory, world);
 
         PrepareResult::DrawRecord
     }
@@ -176,26 +168,23 @@ impl<B: Backend> RenderGroup<B, World> for DrawStar<B> {
         mut encoder: RenderPassEncoder<'_, B>,
         index: usize,
         _subpass: hal::pass::Subpass<'_, B>,
-        _world: &World,
+        world: &World,
     ) {
-        // let query = query::Query<B> {
-        //     pool: &self.query_pool,
-        //     id: qid,
-        // };
-        // hal::command::RawCommandBuffer::begin_query(
-        //     query, 
-        //     flags: query::ControlFlags::none(),
-        // );
         if !self.stars.is_empty() {
             encoder.bind_graphics_pipeline(&self.pipeline);
             self.env.bind(index, &self.pipeline_layout, 0, &mut encoder);
             self.stars.bind(index, &self.pipeline_layout, 1, &mut encoder);
-            self.tex.bind(index, &self.pipeline_layout, 2, &mut encoder);
-            unsafe {
-                self.vertex.draw(&mut encoder, 0..self.stars.count() as u32);
+            if let Some(star_texture) = world.try_fetch::<StarTexture>() {
+                if let Some(texture_id) = star_texture.tex_id {
+                    if self.tex.loaded(texture_id) {
+                        self.tex.bind(&self.pipeline_layout, 2, texture_id, &mut encoder);
+                        unsafe {
+                            self.vertex.draw(&mut encoder, 0..self.stars.count() as u32);
+                        }
+                    }
+                }
             }
         }
-        // hal::command::RawCommandBuffer::end_query(query);
     }
 
     fn dispose(self: Box<Self>, factory: &mut Factory<B>, _world: &World) {
@@ -229,10 +218,8 @@ fn build_custom_pipeline<B: Backend>(
     let pipes = PipelinesBuilder::new()
         .with_pipeline(
             PipelineDescBuilder::new()
-                // This Pipeline uses our custom vertex description and uses instancing.
                 .with_vertex_desc(&[(PosTex::vertex(), pso::VertexInputRate::Vertex)])
                 .with_input_assembler(pso::InputAssemblerDesc::new(hal::Primitive::TriangleList))
-                // Add the shaders
                 .with_shaders(util::simple_shader_set(
                     &shader_vertex,
                     Some(&shader_fragment),
@@ -240,21 +227,17 @@ fn build_custom_pipeline<B: Backend>(
                 .with_layout(&pipeline_layout)
                 .with_subpass(subpass)
                 .with_framebuffer_size(framebuffer_width, framebuffer_height)
-                .with_depth_test(pso::DepthTest::On {
+                .with_depth_test(pso::DepthTest {
                     fun: pso::Comparison::Less,
                     write: true,
                 })
-                .with_blend_targets(vec![pso::ColorBlendDesc(pso::ColorMask::ALL, pso::BlendState::ALPHA)]),
+                .with_blend_targets(vec![pso::ColorBlendDesc { blend: Some(pso::BlendState::ALPHA), mask: pso::ColorMask::ALL}]),
         )
         .build(factory, None);
-
-    // Destoy the shaders once loaded
     unsafe {
         factory.destroy_shader_module(shader_vertex);
         factory.destroy_shader_module(shader_fragment);
     }
-
-    // Handle the Errors
     match pipes {
         Err(e) => {
             unsafe {
@@ -265,10 +248,19 @@ fn build_custom_pipeline<B: Backend>(
         Ok(mut pipes) => Ok((pipes.remove(0), pipeline_layout)),
     }
 }
-
-/// A [RenderPlugin] for our custom plugin
 #[derive(Debug, Default)]
-pub struct StarRender;
+pub struct StarRender {
+    flash_path: String,
+}
+
+impl StarRender {
+    pub fn new(flash_path: impl Into<String>) -> Self {
+        Self {
+            flash_path: flash_path.into(),
+        }
+    }
+}
+
 
 impl<B: Backend> RenderPlugin<B> for StarRender {
     fn on_build<'a, 'b>(
@@ -276,8 +268,20 @@ impl<B: Backend> RenderPlugin<B> for StarRender {
         world: &mut World,
         _builder: &mut DispatcherBuilder<'a, 'b>,
     ) -> Result<(), Error> {
-        // Add the required components to the world ECS
-        // We need to move the object out of the option to obtain it validly.
+        let tex = {
+            if !world.has_value::<AssetStorage::<Texture>>() {
+                world.insert(AssetStorage::<Texture>::new());
+            }
+            let loader = world.read_resource::<Loader>();
+            loader.load(
+                &self.flash_path,
+                amethyst::renderer::formats::texture::ImageFormat::default(),
+                (),
+                &world.read_resource::<AssetStorage<Texture>>(),
+            )
+        };
+
+        world.insert(StarTexture::new(tex));
         world.register::<crate::Star>();
         Ok(())
     }
@@ -289,46 +293,9 @@ impl<B: Backend> RenderPlugin<B> for StarRender {
         _world: &World,
     ) -> Result<(), Error> {
         plan.extend_target(Target::Main, |ctx| {
-            // Add our Description
-            ctx.add(RenderOrder::LinearPostEffects, DrawStarDesc::new().builder())?;
+            ctx.add(RenderOrder::DisplayPostEffects, DrawStarDesc::new().builder())?;
             Ok(())
         });
         Ok(())
     }
 }
-
-fn load_glow_texture<B: Backend>(factory: &mut Factory<B>, queue: QueueId, image_count: usize, flags: hal::pso::ShaderStageFlags) -> Result<TextureSet<B>, failure::Error> {
-    let img_data = include_bytes!("../../assets/star_glow.png");
-
-    let img = image::load(Cursor::new(&img_data[..]), image::PNG)
-        .unwrap()
-        .to_rgba();
-    let (width, height) = img.dimensions();
-    let image_data: Vec<Rgba8Srgb> = img
-            .pixels()
-            .map(|p| Rgba8Srgb { repr: p.0 })
-            .collect::<_>();
-
-    let mut tex = TextureSet::new(factory, flags)?;
-    let builder = TextureBuilder::new()
-        .with_data(image_data.as_slice())
-        .with_data_width(width)
-        .with_data_height(height)
-        .with_view_kind(hal::image::ViewKind::D2)
-        .with_kind(hal::image::Kind::D2(width, height, 1, 1));
-    // Write the texture per image.
-    for i in 0..image_count {
-        let glow_tex = builder
-        .build(
-            ImageState {
-                queue,
-                stage: hal::pso::PipelineStage::FRAGMENT_SHADER,
-                access: hal::image::Access::SHADER_READ,
-                layout: hal::image::Layout::ShaderReadOnlyOptimal,
-            },
-            factory
-        )?;
-        tex.write_unique(factory, i, glow_tex);
-    }
-    Ok(tex)
- }

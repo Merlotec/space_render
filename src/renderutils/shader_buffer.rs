@@ -24,17 +24,20 @@ use amethyst::renderer::{
 use glsl_layout::AsStd140;
 
 #[derive(Debug)]
-pub struct PerImageDynamicShaderBuffer<B: Backend, T> {
+pub struct DynamicShaderBufferBinding<B: Backend, T> {
     buffer: Escape<Buffer<B>>,
     set: Escape<DescriptorSet<B>>,
     count: usize,
     marker: PhantomData<T>,
 }
 
+/// Represents a dynamically sized shader buffer that may grow at the discretion of the user.
+/// This is slighlty slower than uniform buffers due to the nature of the memory and access.
+/// Whenever possible, a uniform buffer should be used, but in cases where large amounts of memory may be saved depending on circumstance, this is an option.
 #[derive(Debug)]
 pub struct DynamicShaderBuffer<B: Backend, T> {
     layout: Handle<DescriptorSetLayout<B>>,
-    per_image: Vec<PerImageDynamicShaderBuffer<B, T>>,
+    binding_data: Option<DynamicShaderBufferBinding<B, T>>,
 }
 
 impl<B: Backend, T> DynamicShaderBuffer<B, T> {
@@ -47,7 +50,7 @@ impl<B: Backend, T> DynamicShaderBuffer<B, T> {
                     flags,
                 ))))?
                 .into(),
-            per_image: Vec::new(),
+            binding_data: None,
         })
     }
 
@@ -57,72 +60,39 @@ impl<B: Backend, T> DynamicShaderBuffer<B, T> {
         self.layout.raw()
     }
 
+    /// Results in each image being reconstructed by invalidating the buffer.
+    #[inline]
     pub fn invalidate(&mut self) {
-        self.per_image.clear();
+        self.binding_data.take();
     }
 
     #[inline]
-    pub fn contains_image_at(&self, index: usize) -> bool {
-        self.per_image.len() > index
+    pub fn has_data(&self) -> bool {
+        self.buffer_len() != 0
     }
 
     #[inline]
-    pub fn buffer_len(&self, index: usize) -> usize {
-        if let Some(this_image) = self.per_image.get(index) {
-            this_image.count
+    pub fn buffer_len(&self) -> usize {
+        if let Some(binding) = self.binding_data.as_ref() {
+            binding.count
         } else {
             0
         }
-    }
-
-    pub fn write(&mut self, factory: &Factory<B>, index: usize, data: &[T]) -> bool {
-        let mut changed = false;
-        let this_image = {
-            while self.per_image.len() <= index {
-                self.per_image
-                    .push(PerImageDynamicShaderBuffer::new(factory, &self.layout, mem::size_of::<T>() * data.len(), data.len()));
-                changed = true;
-            }
-            &mut self.per_image[index]
-        };
-
-        {
-            let mut mapped = this_image.map(factory);
-            let mut writer = unsafe {
-                mapped
-                    .write::<u8>(factory.device(), 0..(std::mem::size_of::<T>() * data.len()) as u64)
-                    .unwrap()
-            };
-            let slice = unsafe { writer.slice() };
-            
-            slice.copy_from_slice(util::slice_as_bytes(data));
-        }
-        changed
     }
 
     /// Bind this descriptor set
     #[inline]
     pub fn bind(
         &self,
-        index: usize,
         pipeline_layout: &B::PipelineLayout,
         binding_id: u32,
         encoder: &mut RenderPassEncoder<'_, B>,
-    ) {
-        self.per_image[index].bind(pipeline_layout, binding_id, encoder);
-    }
-
-    pub fn read(&mut self, factory: &Factory<B>, index: usize) -> Option<Vec<T>> where T: std::marker::Copy {
-        if let Some(this_image) = self.per_image.get_mut(index) {
-            let count = this_image.count;
-            let mut mapped: MappedRange<B> = this_image.map(factory);
-            let bytes = unsafe {
-                mapped.read::<T>(factory, 0..(count * mem::size_of::<T>()) as u64)
-            }.ok()?;
-            let vec: Vec<T> = bytes.to_vec();
-            Some(vec)
+    ) -> Result<(), ()>{
+        if let Some(binding_data) = self.binding_data.as_ref() {
+            binding_data.bind(pipeline_layout, binding_id, encoder);
+            Ok(())
         } else {
-            None
+            Err(())
         }
     }
 }
@@ -131,36 +101,27 @@ impl<B: Backend, T: AsStd140> DynamicShaderBuffer<B, T>
     where
         T::Std140: Sized,
 {
-    pub fn write_formatted(&mut self, factory: &Factory<B>, index: usize, data: &[T]) -> bool {
+    pub fn write(&mut self, factory: &Factory<B>, data: &[T]) {
         let mut formatted = Vec::with_capacity(data.len());
         for item in data {
             formatted.push(item.std140());
         }
-        let mut changed = false;
-        let this_image = {
-            while self.per_image.len() <= index {
-                self.per_image.push(PerImageDynamicShaderBuffer::new(factory, &self.layout, mem::size_of::<T::Std140>() * formatted.len(), formatted.len()));
-                changed = true;
-            }
-            &mut self.per_image[index]
-        };
-        {
-            let mut mapped = this_image.map(factory);
+        self.binding_data = Some(DynamicShaderBufferBinding::new(factory, &self.layout, mem::size_of::<T::Std140>() * formatted.len(), formatted.len()));
+        if let Some(binding_data) = self.binding_data.as_mut() {
+            let mut mapped = binding_data.map(factory);
             let mut writer = unsafe {
                 mapped
                     .write::<u8>(factory.device(), 0..(mem::size_of::<T::Std140>() * formatted.len()) as u64)
                     .unwrap()
             };
             let slice = unsafe { writer.slice() };
-        
+
             slice.copy_from_slice(util::slice_as_bytes(formatted.as_slice()));
         }
-        this_image.count = formatted.len();
-        changed
     }
 }
 
-impl<B: Backend, T> PerImageDynamicShaderBuffer<B, T> {
+impl<B: Backend, T> DynamicShaderBufferBinding<B, T> {
     fn new(factory: &Factory<B>, layout: &Handle<DescriptorSetLayout<B>>, size: usize, count: usize) -> Self {
         let buffer = factory
             .create_buffer(

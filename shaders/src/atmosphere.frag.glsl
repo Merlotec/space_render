@@ -83,8 +83,8 @@ float phase_ray( float cc ) {
 const float R_INNER = 1.0;
 const float R = R_INNER + 0.5;
 
-const int NUM_OUT_SCATTER = 5;
-const int NUM_IN_SCATTER = 50;
+const int NUM_OUT_SCATTER = 4;
+const int NUM_IN_SCATTER = 40;
 
 float density( vec3 p, float ph ) {
 	return exp( -max( length( p ) - R_INNER, 0.0 ) / ph );
@@ -105,7 +105,7 @@ float optic( vec3 p, vec3 q, float ph ) {
 }
 
 vec4 in_scatter( vec3 o, vec3 dir, vec2 e, vec3 l, float ar ) {
-    const float rf = (ar * ar * ar * ar);
+    const float rf = ar * 0.85;
 	const float ph_ray = 0.01 * rf;
     const float ph_mie = 0.004 * rf;
     
@@ -164,10 +164,14 @@ const float DEPTH_PADDING = 0.9;
 
 void main()
 {
-    vec4 csp = inv_proj * vec4(ndc, 0.5, 1.0);
-    vec3 dir = normalize(csp.xyz);
     target = vec4( 0.0 );
     gl_FragDepth = 1.0;
+
+    if (planet_count <= 0) return;
+
+    vec4 csp = inv_proj * vec4(ndc, 0.5, 1.0);
+    vec3 dir = normalize(csp.xyz);
+
     for (uint p = 0; p < planet_count; p++) {
         // The factor which scales down to 'normalized' scale (planet radius of 1.0).
         const float gk = 1.0 / planets[p].radius;

@@ -1,7 +1,10 @@
 pub mod planet;
 pub mod star;
 pub mod cosmos;
-pub mod util;
+
+mod renderutils;
+
+pub use renderutils::set_camera_far;
 
 pub use planet::{
     Planet,

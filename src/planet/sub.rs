@@ -61,9 +61,5 @@ impl<B: Backend> PlanetSub<B> {
     pub fn is_empty(&self) -> bool {
         self.data.count == 0
     }
-
-    pub fn count(&self) -> usize {
-        self.data.count as usize
-    }
 }
 

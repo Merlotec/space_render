@@ -27,8 +27,10 @@ use amethyst::{
 use crate::{
     planet::sub::*,
     star::sub::*,
-    util::*,
 };
+
+use crate::renderutils::*;
+
 use amethyst::prelude::WorldExt;
 
 const STATIC_DEPTH: f32 = 0.0;
@@ -46,17 +48,17 @@ const STATIC_INSTANCE_DATA: [u32; 6] = [0, 1, 2, 0, 3, 2];
 lazy_static::lazy_static! {
     // These uses the precompiled shaders.
     // These can be obtained using glslc.exe in the vulkan sdk.
-    static ref VERTEX: SpirvShader = SpirvShader::new(
-        include_bytes!("../../shaders/spirv/atmosphere.vert.spv").to_vec(),
+    static ref VERTEX: SpirvShader = SpirvShader::from_bytes(
+        include_bytes!("../../shaders/spirv/atmosphere.vert.spv"),
         ShaderStageFlags::VERTEX,
         "main",
-    );
+    ).unwrap();
 
-    static ref FRAGMENT: SpirvShader = SpirvShader::new(
-        include_bytes!("../../shaders/spirv/atmosphere.frag.spv").to_vec(),
+    static ref FRAGMENT: SpirvShader = SpirvShader::from_bytes(
+        include_bytes!("../../shaders/spirv/atmosphere.frag.spv"),
         ShaderStageFlags::FRAGMENT,
         "main",
-    );
+    ).unwrap();
 }
 
 /// Draw triangles.
@@ -196,11 +198,11 @@ fn build_custom_pipeline<B: Backend>(
                 .with_layout(&pipeline_layout)
                 .with_subpass(subpass)
                 .with_framebuffer_size(framebuffer_width, framebuffer_height)
-                .with_depth_test(pso::DepthTest::On {
+                .with_depth_test(pso::DepthTest {
                     fun: pso::Comparison::Less,
                     write: true,
                 })
-                .with_blend_targets(vec![pso::ColorBlendDesc(pso::ColorMask::ALL, pso::BlendState::ALPHA)]),
+                .with_blend_targets(vec![pso::ColorBlendDesc { blend: Some(pso::BlendState::ALPHA), mask: pso::ColorMask::ALL}]),
         )
         .build(factory, None);
 

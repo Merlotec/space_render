@@ -7,21 +7,16 @@ use amethyst::{
         }
     },
     renderer::{
-        submodules::{DynamicUniform, TextureSub},
+        submodules::DynamicUniform,
         rendy::{
-            texture::{Texture, TextureBuilder},
-            command::{RenderPassEncoder, QueueId},
-            factory::{Factory, ImageState},
+            command::RenderPassEncoder,
+            factory::Factory,
             hal,
         },
         types::Backend,
     },
     ecs::prelude::*,
 };
-
-use crate::util::TextureSet;
-
-use std::io::Cursor;
 
 use super::*;
 
@@ -41,7 +36,6 @@ impl<B: Backend> StarSub<B> {
         let mut star_list: Vec<StarData> = Vec::new();
         for (star, transform) in (&world.read_storage::<Star>(), &world.read_storage::<Transform>()).join() {
             let matrix: Matrix4<f32> = *transform.global_matrix();
-            let scale: Vector4<f32> = matrix.diagonal();
             let translation: Vector4<f32> = matrix.column(3).into();
             if matrix.column(0)[0].abs() == matrix.column(1)[1].abs() && matrix.column(1)[1].abs() == matrix.column(2)[2].abs() {
                 // The scale is uniform - this is good.

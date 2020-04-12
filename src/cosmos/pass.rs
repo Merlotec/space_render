@@ -26,7 +26,7 @@ use amethyst::{
 use glsl_layout::*;
 
 use super::*;
-use crate::util::*;
+use crate::renderutils::*;
 
 pub const STAR_DEPTH: f32 = -1000.0;
 
@@ -54,17 +54,17 @@ const STATIC_INSTANCE_DATA: [u32; 6] = [0, 1, 2, 0, 3, 2];
 lazy_static::lazy_static! {
     // These uses the precompiled shaders.
     // These can be obtained using glslc.exe in the vulkan sdk.
-    static ref VERTEX: SpirvShader = SpirvShader::new(
-        include_bytes!("../../shaders/spirv/star_point.vert.spv").to_vec(),
+    static ref VERTEX: SpirvShader = SpirvShader::from_bytes(
+        include_bytes!("../../shaders/spirv/star_point.vert.spv"),
         ShaderStageFlags::VERTEX,
         "main",
-    );
+    ).unwrap();
 
-    static ref FRAGMENT: SpirvShader = SpirvShader::new(
-        include_bytes!("../../shaders/spirv/star_point.frag.spv").to_vec(),
+    static ref FRAGMENT: SpirvShader = SpirvShader::from_bytes(
+        include_bytes!("../../shaders/spirv/star_point.frag.spv"),
         ShaderStageFlags::FRAGMENT,
         "main",
-    );
+    ).unwrap();
 }
 
 /// Draw triangles.
@@ -148,13 +148,9 @@ impl<B: Backend> RenderGroup<B, World> for DrawCosmos<B> {
             }
             sky.changed = false;
             self.env.process(factory, index, world);
-            if !self.star_buffer.contains_image_at(index) {
-                let changed = self.star_buffer.write_formatted(factory, index, self.star_list.as_slice());
-                if changed {
-                    PrepareResult::DrawRecord
-                } else {
-                    PrepareResult::DrawReuse
-                }
+            if !self.star_buffer.has_data() {
+                self.star_buffer.write(factory, self.star_list.as_slice());
+                PrepareResult::DrawRecord
             } else {
                 PrepareResult::DrawReuse
             }
@@ -174,9 +170,10 @@ impl<B: Backend> RenderGroup<B, World> for DrawCosmos<B> {
         if self.star_list.len() != 0 {
             encoder.bind_graphics_pipeline(&self.pipeline);
             self.env.bind(index, &self.pipeline_layout, 0, &mut encoder);
-            self.star_buffer.bind(index, &self.pipeline_layout, 1, &mut encoder);
-            unsafe {
-                self.vertex.draw(&mut encoder, 0..self.star_list.len() as u32);
+            if let Ok(_) = self.star_buffer.bind(&self.pipeline_layout, 1, &mut encoder) {
+                unsafe {
+                    self.vertex.draw(&mut encoder, 0..self.star_list.len() as u32);
+                }
             }
         }
     }
@@ -223,11 +220,11 @@ fn build_custom_pipeline<B: Backend>(
                 .with_layout(&pipeline_layout)
                 .with_subpass(subpass)
                 .with_framebuffer_size(framebuffer_width, framebuffer_height)
-                .with_depth_test(pso::DepthTest::On {
+                .with_depth_test(pso::DepthTest {
                     fun: pso::Comparison::LessEqual,
                     write: false,
                 })
-                .with_blend_targets(vec![pso::ColorBlendDesc(pso::ColorMask::ALL, pso::BlendState::ALPHA)]),
+                .with_blend_targets(vec![pso::ColorBlendDesc { blend: Some(pso::BlendState::ALPHA), mask: pso::ColorMask::ALL}]),
         )
         .build(factory, None);
 

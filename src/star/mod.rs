@@ -1,12 +1,19 @@
 pub mod sub;
 pub mod pass;
 use amethyst::{
-    assets::PrefabData,
+    assets::{
+        PrefabData,
+        Handle,
+    },
     derive::PrefabData,
     core::math::{
         Vector3,
     },
-    renderer::palette::Srgb,
+    renderer::{
+        Texture,
+        palette::Srgb,
+        submodules::TextureId,
+    },
     error::Error,
     ecs::prelude::*,
 };
@@ -14,6 +21,21 @@ use amethyst::{
 use serde::{Serialize, Deserialize};
 
 use glsl_layout::*;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StarTexture {
+    texture: Handle<Texture>,
+    tex_id: Option<TextureId>,
+}
+
+impl StarTexture {
+    pub fn new(texture: Handle<Texture>) -> Self {
+        Self {
+            texture,
+            tex_id: None,
+        }
+    }
+}
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PrefabData)]
 #[prefab(Component)]
