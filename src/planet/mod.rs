@@ -20,8 +20,11 @@ use serde::{Serialize, Deserialize};
 #[prefab(Component)]
 /// Describes a planet's planet (from a rendering perspective).
 pub struct Atmosphere {
-    /// The radius of the planet relative to the planet's radius.
+    /// The radius of the atmosphere relative to the planet's radius.
     pub height: f32,
+
+    /// The radius of the base planet.
+    pub base_planet_radius: f32,
 
     /// Hue color of the planet.
     #[serde(with = "amethyst::renderer::serde_shim::srgb")]
@@ -33,8 +36,8 @@ pub struct Atmosphere {
 
 impl Atmosphere {
     /// Create a new planet component with the specified data.
-    pub fn new(height: f32, hue: Srgb, density: f32) -> Self {
-        Self { height, hue, density }
+    pub fn new(height: f32, hue: Srgb, density: f32, base_planet_radius: f32) -> Self {
+        Self { height, hue, density, base_planet_radius }
     }
 
     #[inline]
@@ -93,7 +96,6 @@ impl Planet {
 }
 
 impl Component for Planet {
-    // We want flagged storage because we need to know when to rebuild the buffers.
     type Storage = DenseVecStorage<Self>;
 }
 
@@ -115,7 +117,7 @@ impl PlanetData {
             center: Into::<[f32; 3]>::into(center).into(),
             radius,
             hue: [atmosphere.hue.red, atmosphere.hue.green, atmosphere.hue.blue].into(),
-            atmosphere_radius: radius + atmosphere.height(),
+            atmosphere_radius: radius * atmosphere.height(),
             atmosphere_density: atmosphere.density(),
         }
     }

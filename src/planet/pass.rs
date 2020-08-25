@@ -77,7 +77,7 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawAtmosphereDesc {
         self,
         _ctx: &GraphContext<B>,
         factory: &mut Factory<B>,
-        queue: QueueId,
+        _queue: QueueId,
         _world: &World,
         framebuffer_width: u32,
         framebuffer_height: u32,
@@ -89,7 +89,7 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawAtmosphereDesc {
         let planets = PlanetSub::new(factory, pso::ShaderStageFlags::FRAGMENT)?;
         let stars = StarSub::new(factory, pso::ShaderStageFlags::FRAGMENT)?;
          // We need to generate the sphere mesh for the planet.
-        let vertex = StaticVertexBuffer::allocate(factory, queue, &STATIC_VERTEX_DATA, Some(&STATIC_INSTANCE_DATA))?;
+        let vertex = StaticVertexBuffer::new();
         let (pipeline, pipeline_layout) = build_custom_pipeline(
             factory,
             subpass,
@@ -125,7 +125,7 @@ impl<B: Backend> RenderGroup<B, World> for DrawAtmosphere<B> {
     fn prepare(
         &mut self,
         factory: &Factory<B>,
-        _queue: QueueId,
+        queue: QueueId,
         index: usize,
         _subpass: hal::pass::Subpass<'_, B>,
         world: &World,
@@ -134,6 +134,14 @@ impl<B: Backend> RenderGroup<B, World> for DrawAtmosphere<B> {
         self.env.process(factory, index, world);
         self.planets.process(factory, index, world);
         self.stars.process(factory, index, world);
+
+        self.vertex.prepare(
+            factory,
+            queue,
+            &STATIC_VERTEX_DATA,
+            Some(&STATIC_INSTANCE_DATA),
+            index
+        ).expect("Failed to prepare static vertex buffer!");
 
         PrepareResult::DrawRecord
     }
@@ -151,7 +159,7 @@ impl<B: Backend> RenderGroup<B, World> for DrawAtmosphere<B> {
             self.planets.bind(index, &self.pipeline_layout, 1, &mut encoder);
             self.stars.bind(index, &self.pipeline_layout, 2, &mut encoder);
             unsafe {
-                self.vertex.draw(&mut encoder, 0..1);
+                self.vertex.draw(&mut encoder, 0..1, index);
             }
         }
     }
@@ -250,7 +258,7 @@ impl<B: Backend> RenderPlugin<B> for AtmosphereRender {
     ) -> Result<(), Error> {
         plan.extend_target(Target::Main, |ctx| {
             // Add our Description
-            ctx.add(RenderOrder::BeforeTransparent, DrawAtmosphereDesc::new().builder())?;
+            ctx.add(RenderOrder::LinearPostEffects, DrawAtmosphereDesc::new().builder())?;
             Ok(())
         });
         Ok(())

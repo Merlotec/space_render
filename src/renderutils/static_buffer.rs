@@ -2,47 +2,85 @@ use std::marker::PhantomData;
 use std::mem;
 use std::ops::Range;
 
-use amethyst::renderer::{
-    rendy::{
-        command::{
-            QueueId,
-            RenderPassEncoder,
+use amethyst::{
+    renderer::{
+        rendy::{
+            command::{
+                QueueId,
+                RenderPassEncoder,
+            },
+            factory::{
+                Factory,
+                BufferState,
+            },
+            hal,
+            memory,
+            memory::{
+                Write,
+            },
+            resource::{
+                Buffer,
+                BufferInfo,
+                Escape,
+            },
         },
-        factory::{
-            Factory,
-            BufferState,
-        },
-        hal,
-        memory,
-        resource::{
-            Buffer,
-            BufferInfo,
-            Escape,
-        },
+        types::Backend,
+        util,
     },
-    types::Backend,
 };
+use std::alloc::alloc;
 
 #[derive(Debug)]
 /// A helper struct use to simplify the use of a read only vertex buffer which is constant.
 pub struct StaticVertexBuffer<B: Backend, T> {
+    per_image: Vec<PerImageStaticVertexBuffer<B, T>>,
+}
+
+impl<B: Backend, T> StaticVertexBuffer<B, T> {
+    pub fn new() -> Self {
+        Self {
+            per_image: vec![],
+        }
+    }
+
+    pub fn prepare(&mut self, factory: &Factory<B>, queue: QueueId, vertex_data: &[T], index_data: Option<&[u32]>, index: usize) -> Result<(), failure::Error> {
+       if self.per_image.len() <= index {
+           self.per_image.insert(
+               index,
+               PerImageStaticVertexBuffer::allocate(
+                   factory,
+                   queue,
+                   vertex_data,
+                   index_data,
+               )?
+           );
+       }
+        Ok(())
+    }
+
+    pub unsafe fn draw(&self, encoder: &mut RenderPassEncoder<'_, B>, instances: Range<u32>, index: usize) {
+        self.per_image[index].draw(encoder, instances);
+    }
+}
+
+#[derive(Debug)]
+pub struct PerImageStaticVertexBuffer<B: Backend, T> {
     vertex_buffer: Escape<Buffer<B>>,
     vertex_count: usize,
     index_buffer: Option<(Escape<Buffer<B>>, usize)>,
     phantom: PhantomData<T>,
 }
 
-impl<B: Backend, T> StaticVertexBuffer<B, T> {
+impl<B: Backend, T> PerImageStaticVertexBuffer<B, T> {
     pub fn allocate(factory: &Factory<B>, queue: QueueId, vertex_data: &[T], index_data: Option<&[u32]>) -> Result<Self, failure::Error> {
         let index_buffer: Option<(Escape<Buffer<B>>, usize)> = {
             if let Some(index_data) = index_data {
                 Some(
                     (
-                        alloc_read_optimal(
+                        // We need to use alloc_dynamic because the other one causes strange instability...
+                        alloc_dynamic(
                             factory,
-                            queue,
                             hal::buffer::Usage::INDEX,
-                            hal::pso::PipelineStage::VERTEX_INPUT,
                             index_data
                         )?,
                         index_data.len()
@@ -54,11 +92,10 @@ impl<B: Backend, T> StaticVertexBuffer<B, T> {
         };
         Ok(
             Self {
-                vertex_buffer: alloc_read_optimal(
+                // We need to use alloc_dynamic because the other one causes strange instability...
+                vertex_buffer: alloc_dynamic(
                     factory,
-                    queue,
                     hal::buffer::Usage::VERTEX,
-                    hal::pso::PipelineStage::VERTEX_INPUT,
                     vertex_data
                 )?,
                 vertex_count: vertex_data.len(),
@@ -83,31 +120,35 @@ impl<B: Backend, T> StaticVertexBuffer<B, T> {
 /// Creates a GPU read optimal buffer which is optimised for the fastest possible read speeds.
 /// This means that uploading data to the buffer is more laborious, but since we aren't changing the data it doesn't matter.
 fn alloc_read_optimal<B: hal::Backend, T>(factory: &Factory<B>, queue: QueueId, usage: hal::buffer::Usage, stage: hal::pso::PipelineStage, data: &[T]) -> Result<Escape<Buffer<B>>, failure::Error> {
+    let buffer_size = mem::size_of_val(data) as u64;
+
     let mut staging = factory
         .create_buffer(
             BufferInfo {
-                size: (data.len() * mem::size_of::<T>()) as u64,
+                size: buffer_size,
                 usage: hal::buffer::Usage::TRANSFER_SRC,
             },
-            memory::Dynamic,
+            memory::Upload,
         )?;
 
-    let buffer = factory
+    let mut buffer = factory
         .create_buffer(
             BufferInfo {
-                size: (data.len() * mem::size_of::<T>()) as u64,
+                size: buffer_size,
                 usage: hal::buffer::Usage::TRANSFER_DST | usage,
             },
             memory::Data,
         )?;
 
     unsafe {
-        factory
-            .upload_visible_buffer(
-                &mut staging,
-                0,
-                data,
-            )?;
+        {
+            let mut mapped = staging.map(factory.device(), 0..buffer_size)?;
+            let mut writer = mapped.write::<u8>(factory.device(), 0..buffer_size)?;
+            let slice = writer.slice();
+            let data_slice = util::slice_as_bytes(data);
+            slice.copy_from_slice(data_slice);
+        }
+
         factory.upload_from_staging_buffer(
             &buffer,
             0,
@@ -115,7 +156,30 @@ fn alloc_read_optimal<B: hal::Backend, T>(factory: &Factory<B>, queue: QueueId, 
             None,
             BufferState::new(queue)
                 .with_stage(stage)
+
         )?;
+    }
+    Ok(buffer)
+}
+
+fn alloc_dynamic<B: hal::Backend, T>(factory: &Factory<B>, usage: hal::buffer::Usage, data: &[T]) -> Result<Escape<Buffer<B>>, failure::Error> {
+    let buffer_size = mem::size_of_val(data) as u64;
+
+    let mut buffer = factory
+        .create_buffer(
+            BufferInfo {
+                size: buffer_size,
+                usage,
+            },
+            memory::Dynamic,
+        )?;
+
+    unsafe {
+        let mut mapped = buffer.map(factory.device(), 0..buffer_size)?;
+        let mut writer = mapped.write::<u8>(factory.device(), 0..buffer_size)?;
+        let slice = writer.slice();
+        let data_slice = util::slice_as_bytes(data);
+        slice.copy_from_slice(data_slice);
     }
     Ok(buffer)
 }

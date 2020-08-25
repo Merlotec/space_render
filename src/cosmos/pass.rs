@@ -83,7 +83,7 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCosmosDesc {
         self,
         _ctx: &GraphContext<B>,
         factory: &mut Factory<B>,
-        queue: QueueId,
+        _queue: QueueId,
         _world: &World,
         framebuffer_width: u32,
         framebuffer_height: u32,
@@ -91,9 +91,9 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCosmosDesc {
         _buffers: Vec<NodeBuffer>,
         _images: Vec<NodeImage>,
     ) -> Result<Box<dyn RenderGroup<B, World>>, failure::Error> {
-        let env = FlatEnvironmentSub::new(factory)?;
-        let star_buffer = DynamicShaderBuffer::new(factory, pso::ShaderStageFlags::VERTEX)?;
-        let vertex = StaticVertexBuffer::allocate(factory, queue, &STATIC_VERTEX_DATA, Some(&STATIC_INSTANCE_DATA))?;
+         let env = FlatEnvironmentSub::new(factory)?;
+         let star_buffer = DynamicShaderBuffer::<B, StarPointData>::new(factory, pso::ShaderStageFlags::VERTEX)?;
+         let vertex = StaticVertexBuffer::new();
 
         let (pipeline, pipeline_layout) = build_custom_pipeline(
             factory,
@@ -105,12 +105,12 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCosmosDesc {
         )?;
 
         Ok(Box::new(DrawCosmos::<B> {
-            pipeline,
-            pipeline_layout,
-            env,
-            vertex,
-            star_list: Vec::new(),
-            star_buffer,
+             pipeline,
+             pipeline_layout,
+             env,
+             vertex,
+             star_list: Vec::new(),
+             star_buffer,
         }))
     }
 }
@@ -118,23 +118,31 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawCosmosDesc {
 /// Draws triangles to the screen.
 #[derive(Debug)]
 pub struct DrawCosmos<B: Backend> {
-    pipeline: B::GraphicsPipeline,
-    pipeline_layout: B::PipelineLayout,
-    env: FlatEnvironmentSub<B>,
-    vertex: StaticVertexBuffer<B, PosTex>,
-    star_list: Vec<StarPointData>,
-    star_buffer: DynamicShaderBuffer<B, StarPointData>,
+     pipeline: B::GraphicsPipeline,
+     pipeline_layout: B::PipelineLayout,
+     env: FlatEnvironmentSub<B>,
+     vertex: StaticVertexBuffer<B, PosTex>,
+     star_list: Vec<StarPointData>,
+     star_buffer: DynamicShaderBuffer<B, StarPointData>,
 }
 
 impl<B: Backend> RenderGroup<B, World> for DrawCosmos<B> {
     fn prepare(
         &mut self,
         factory: &Factory<B>,
-        _queue: QueueId,
+        queue: QueueId,
         index: usize,
         _subpass: hal::pass::Subpass<'_, B>,
         world: &World,
     ) -> PrepareResult {
+
+        self.vertex.prepare(
+            factory,
+            queue,
+            &STATIC_VERTEX_DATA,
+            Some(&STATIC_INSTANCE_DATA),
+            index
+        ).expect("Failed to prepare static vertex buffer!");
 
         if let Some(mut sky) = world.try_fetch_mut::<Cosmos>() {
             if sky.changed || self.star_list.len() != sky.stars().len() {
@@ -172,7 +180,7 @@ impl<B: Backend> RenderGroup<B, World> for DrawCosmos<B> {
             self.env.bind(index, &self.pipeline_layout, 0, &mut encoder);
             if let Ok(_) = self.star_buffer.bind(&self.pipeline_layout, 1, &mut encoder) {
                 unsafe {
-                    self.vertex.draw(&mut encoder, 0..self.star_list.len() as u32);
+                    self.vertex.draw(&mut encoder, 0..self.star_list.len() as u32, index);
                 }
             }
         }

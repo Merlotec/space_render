@@ -37,13 +37,15 @@ impl<B: Backend> PlanetSub<B> {
         for (atmosphere, transform) in (&world.read_storage::<Atmosphere>(), &world.read_storage::<Transform>()).join() {
             let matrix: Matrix4<f32> = *transform.global_matrix();
             let translation: Vector4<f32> = matrix.column(3).into();
-            if matrix.column(0)[0].abs() == matrix.column(1)[1].abs() && matrix.column(1)[1].abs() == matrix.column(2)[2].abs() {
+            let uniform_scale: f32 = matrix.row(0)[0].abs();
+           // if matrix.column(0)[0].abs() == matrix.column(1)[1].abs() && matrix.column(1)[1].abs() == matrix.column(2)[2].abs() {
                 // The scale is uniform - this is good.
-                planet_list.push(PlanetData::new(&atmosphere,translation.xyz(), matrix.row(0)[0].abs()));
-            } else {
+
+            planet_list.push(PlanetData::new(&atmosphere,translation.xyz(), atmosphere.base_planet_radius * uniform_scale));
+           // } else {
                 // The scale is non uniform, which means that we cannot extract a radius for the planet.
-                panic!("Non uniform scale provided for planet! We need a uniform scale (x, y, z components of scale are the same) to determine the radius of the planet, as it is spherical.");
-            }
+               //panic!("Non uniform scale provided for planet! We need a uniform scale (x, y, z components of scale are the same) to determine the radius of the planet, as it is spherical.");
+            //}
         }
         self.data = PlanetList::new(planet_list.as_slice());
         self.uniform.write(factory, index, self.data.std140());

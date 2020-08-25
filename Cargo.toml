@@ -1,14 +1,13 @@
 [package]
 name = "space-render"
-version = "0.1.1"
+version = "0.1.2"
 description="A compact render plugin to the Amethyst game engine which renders background stars, close up stars (the sun) and planet atmospheres using atmospheric scattering."
-repository="https://github.com/Merlotec/space-render.git"
+repository="https://github.com/Merlotec/space_render.git"
+readme="README.md"
 authors = ["Brodie Knight <ncbmknight@gmail.com>"]
 keywords=["cosmos", "stars", "amethyst", "renderer", "plugin"]
 edition = "2018"
 license="MIT"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
 glsl-to-spirv = "0.1.7"

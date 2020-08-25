@@ -83,7 +83,7 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawStarDesc {
         self,
         _ctx: &GraphContext<B>,
         factory: &mut Factory<B>,
-        queue: QueueId,
+        _queue: QueueId,
         _world: &World,
         framebuffer_width: u32,
         framebuffer_height: u32,
@@ -99,7 +99,7 @@ impl<B: Backend> RenderGroupDesc<B, World> for DrawStarDesc {
         let tex = TextureSub::new(factory)?;
         
         // Load billboard mesh.
-        let vertex = StaticVertexBuffer::allocate(factory, queue, &STATIC_VERTEX_DATA, Some(&STATIC_INSTANCE_DATA))?;
+        let vertex = StaticVertexBuffer::new();
         let (pipeline, pipeline_layout) = build_custom_pipeline(
             factory,
             subpass,
@@ -142,7 +142,7 @@ impl<B: Backend> RenderGroup<B, World> for DrawStar<B> {
     fn prepare(
         &mut self,
         factory: &Factory<B>,
-        _queue: QueueId,
+        queue: QueueId,
         index: usize,
         _subpass: hal::pass::Subpass<'_, B>,
         world: &World,
@@ -159,6 +159,14 @@ impl<B: Backend> RenderGroup<B, World> for DrawStar<B> {
             }
         }
         self.tex.maintain(factory, world);
+
+        self.vertex.prepare(
+            factory,
+            queue,
+            &STATIC_VERTEX_DATA,
+            Some(&STATIC_INSTANCE_DATA),
+            index
+        ).expect("Failed to prepare static vertex buffer!");
 
         PrepareResult::DrawRecord
     }
@@ -179,7 +187,7 @@ impl<B: Backend> RenderGroup<B, World> for DrawStar<B> {
                     if self.tex.loaded(texture_id) {
                         self.tex.bind(&self.pipeline_layout, 2, texture_id, &mut encoder);
                         unsafe {
-                            self.vertex.draw(&mut encoder, 0..self.stars.count() as u32);
+                            self.vertex.draw(&mut encoder, 0..self.stars.count() as u32, index);
                         }
                     }
                 }
@@ -293,7 +301,7 @@ impl<B: Backend> RenderPlugin<B> for StarRender {
         _world: &World,
     ) -> Result<(), Error> {
         plan.extend_target(Target::Main, |ctx| {
-            ctx.add(RenderOrder::DisplayPostEffects, DrawStarDesc::new().builder())?;
+            ctx.add(RenderOrder::AfterTransparent, DrawStarDesc::new().builder())?;
             Ok(())
         });
         Ok(())
