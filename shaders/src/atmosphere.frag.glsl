@@ -129,14 +129,6 @@ vec4 in_scatter( vec3 o, vec3 dir, vec2 e, vec3 l, float ar ) {
         n_ray0 += d_ray;
         n_mie0 += d_mie;
 
-        #if 0
-        vec2 e = ray_vs_sphere( v, l, R_INNER );
-        e.x = max( e.x, 0.0 );
-        if ( e.x < e.y ) {
-            continue;
-        }
-            #endif
-
         vec2 f = ray_vs_sphere( v, l, ar );
         vec3 u = v + l * f.y;
 
